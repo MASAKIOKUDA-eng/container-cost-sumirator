@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>コンテナコスト削減シミュレーター</title>
+<meta name="description" content="AWS コンテナサービス（ECS・EKS・ROSA）のコスト削減を Well-Architected に沿って体験するシミュレーションゲーム">
+<link rel="icon" href="assets/icons/ecs.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">コンテナコスト削減シミュレーター</div>
+  <div class="topbar-right" id="topbar-game">
+    <span id="hdr-platform"></span>
+    <span id="hdr-sprint"></span>
+  </div>
+</header>
+
+<!-- タイトル -->
+<main id="title" class="wrap" hidden>
+  <section class="intro">
+    <h1>コンテナ基盤のコストを、4 スプリントで下げる</h1>
+    <p>あなたは SaaS の SRE。利用ユーザー 1,000 名規模のサービスを AWS 東京リージョンのコンテナ基盤で運用している。
+      Well-Architected フレームワークの「コスト最適化の柱」と Container Build Lens に沿って施策を選び、月額を下げてほしい。</p>
+    <table class="tbl kv scenario">
+      <tr><th>利用者</th><td>登録 1,000 名、1 日のアクティブ 600 名、ピーク時の同時接続 150 名</td></tr>
+      <tr><th>リクエスト</th><td>1 日約 18 万件、ピーク約 30 件/秒</td></tr>
+      <tr><th>構成</th><td>Web（フロント/BFF）・API・ワーカーの 3 サービス。本番・ステージング・開発の 3 環境。本番は 2AZ</td></tr>
+      <tr><th>転送量（月）</th><td>インターネット向け 300GB、本番の AZ 間 200GB、NAT 経由 400GB（うちイメージ取得 300GB）</td></tr>
+      <tr><th>ECR</th><td>イメージ保存量 300GB（未整理）</td></tr>
+    </table>
+    <h2>ルール</h2>
+    <ul class="rules">
+      <li>1 スプリントの工数は 6。施策ごとに必要な工数が決まっていて、全部は導入できない。</li>
+      <li>施策には前提条件や順番があり、守らないと障害が起きて信頼性スコアが下がる。</li>
+      <li>コストを可視化するまで、内訳と各施策の試算額は見えない。</li>
+      <li>4 スプリント終了時の月額と信頼性スコアで評価する。目標は資料の推奨プラン並みの削減。</li>
+    </ul>
+    <h2>プラットフォームを選ぶ</h2>
+    <div id="platforms" class="platforms"></div>
+  </section>
+</main>
+
+<!-- ゲーム -->
+<main id="game" class="wrap" hidden>
+  <section class="metrics">
+    <div class="metric"><div class="metric-label">月額コスト</div><div class="metric-value" id="m-total"></div><div class="metric-sub" id="m-total-sub"></div></div>
+    <div class="metric"><div class="metric-label">削減率</div><div class="metric-value" id="m-red"></div><div class="metric-sub" id="m-red-sub"></div></div>
+    <div class="metric"><div class="metric-label">信頼性スコア</div><div class="metric-value" id="m-rel"></div><div class="metric-sub">100 から開始</div></div>
+    <div class="metric"><div class="metric-label">残り工数</div><div class="metric-value" id="m-effort"></div><div class="metric-sub">このスプリント</div></div>
+  </section>
+
+  <div class="cols">
+    <section class="panel">
+      <h2 class="panel-h">構成図</h2>
+      <div id="diagram" class="diagram"></div>
+    </section>
+    <div class="side">
+      <section class="panel">
+        <h2 class="panel-h">コスト内訳（USD/月）</h2>
+        <div id="breakdown"></div>
+      </section>
+      <section class="panel">
+        <h2 class="panel-h">月額の推移</h2>
+        <div id="history" class="history"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="cols">
+    <section class="panel">
+      <h2 class="panel-h">施策</h2>
+      <table id="measures" class="tbl measures"></table>
+      <div class="actionbar">
+        <span id="pending-note" class="muted"></span>
+        <button id="btn-quit" class="btn">タイトルへ</button>
+        <button id="btn-end" class="btn primary"></button>
+      </div>
+    </section>
+    <section class="panel side">
+      <h2 class="panel-h">イベントログ</h2>
+      <ol id="log" class="log"></ol>
+    </section>
+  </div>
+</main>
+
+<!-- 結果 -->
+<main id="result" class="wrap" hidden>
+  <section class="panel result">
+    <div id="result-body"></div>
+    <div class="actionbar">
+      <button id="btn-title" class="btn">別のプラットフォームで挑戦</button>
+      <button id="btn-retry" class="btn primary">同じプラットフォームでもう一度</button>
+    </div>
+  </section>
+</main>
+
+<dialog id="dialog">
+  <h2 id="dlg-title"></h2>
+  <ul id="dlg-body" class="events"></ul>
+  <div class="actionbar"><button id="dlg-ok" class="btn primary"></button></div>
+</dialog>
+
+<footer class="foot wrap">
+  <p>参考: AWS Well-Architected Framework コスト最適化の柱（COST05〜COST09）、Container Build Lens、EKS Best Practices Guide。
+    金額は東京リージョンの概算で、実際の請求額とは異なる。AWS アイコンは AWS Architecture Icons を使用。</p>
+</footer>
+
+<script src="js/model.js"></script>
+<script src="js/measures.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
