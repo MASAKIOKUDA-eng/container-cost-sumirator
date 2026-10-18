@@ -154,3 +154,25 @@ function costOf(platform, ids, extra = {}) {
 
 const fmtUsd = (v) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const fmtJpy = (v) => '約 ' + (v * PRICE.usdJpy / 10000).toFixed(1) + ' 万円';
+
+// 信頼性スコアの増減（ゲーム・ゲーム内の説明・解説ページで共通）
+const RELIABILITY_RULES = [
+  { id: 'noMetricsRightsize', delta: -15, timing: '1 回', when: 'メトリクスを見ずにライトサイジング（可視化より先、または可視化なしで導入）', example: 'ピーク時に API がメモリ不足で再起動し、利用者から問い合わせが来る' },
+  { id: 'prodSpot', delta: -15, timing: '1 回', when: '本番に Spot を適用', example: '中断が重なると本番の処理能力が落ちる' },
+  { id: 'natSingle', delta: -20, timing: '1 回', when: 'NAT ゲートウェイを全環境で 1 台に集約', example: 'その AZ が落ちると本番も外部に出られない' },
+  { id: 'spotNoSigterm', delta: -10, timing: '四半期ごと', when: 'SIGTERM 未対応のまま非本番に Spot', example: '中断通知（2 分前）を処理できず、ステージングのジョブが途中で落ちる' },
+  { id: 'prodSpotNoSigterm', delta: -10, timing: '四半期ごと', when: 'SIGTERM 未対応のまま本番に Spot', example: '処理中のリクエストが Spot 中断で失敗する' },
+  { id: 'scaleInNoSigterm', delta: -5, timing: '四半期ごと', when: 'SIGTERM 未対応のままオートスケーリング', example: 'スケールインのたびに処理中のリクエストが切断される' },
+  { id: 'quietQuarter', delta: 5, timing: '四半期ごと', when: '障害（減点）のなかった四半期（上限 100）', example: '振り返りと改善が進み、運用が安定する' },
+  { id: 'sigtermFix', delta: 10, timing: '1 回', when: '中断・切断の障害が出たあとに SIGTERM 対応を導入', example: '止められても処理を終えてから停止するようになる' },
+];
+const RELIABILITY = Object.fromEntries(RELIABILITY_RULES.map((r) => [r.id, r.delta]));
+
+// ランクの条件（推奨プラン比の達成率と信頼性スコア）
+const RANKS = [
+  { rank: 'S', achieve: 0.95, rel: 90 },
+  { rank: 'A', achieve: 0.8, rel: 75 },
+  { rank: 'B', achieve: 0.6, rel: 60 },
+  { rank: 'C', achieve: 0, rel: 0 },
+];
+const rankOf = (achieve, rel) => RANKS.find((r) => achieve >= r.achieve && rel >= r.rel).rank;

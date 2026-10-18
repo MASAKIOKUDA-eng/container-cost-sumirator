@@ -1,15 +1,18 @@
 'use strict';
 
-const SPRINTS = 4;
-const EFFORT_PER_SPRINT = 6;
+// 1 年間を四半期（3 か月）ごとに 4 回に分けて進める
+const QUARTERS = 4;
+const EFFORT_PER_QUARTER = 6; // 2 名 × 3 か月
 const ICON = (name) => `assets/icons/${name}.svg`;
+const qName = (q) => `第${q}四半期`;
+const qRange = (q) => `${(q - 1) * 3 + 1}〜${q * 3}か月目`;
 
 let S = null; // ゲーム状態
 
 function newGame(platform) {
   S = {
     platform,
-    sprint: 1,
+    quarter: 1,
     applied: new Set(),
     appliedAt: {},
     pending: new Set(),
@@ -17,28 +20,39 @@ function newGame(platform) {
     spReported: null,
     eksExtended: false,
     reliability: 100,
+    shutdownIncidents: false,
+    briefing: [],
     log: [],
     history: [],
   };
   S.baseline = computeCost(S).total;
   S.history.push({ label: '開始', total: S.baseline });
   show('game');
-  pushLog('info', `月額 ${fmtUsd(S.baseline)} の請求が届いた。CFO から「来期までにコンテナ基盤の費用を下げてほしい」と依頼があった。`);
-  sprintIntro();
+  quarterBriefing();
   render();
 }
 
-function sprintIntro() {
+function quarterBriefing() {
+  const q = S.quarter;
   const p = S.platform;
-  const msg = {
-    1: '1 スプリントで使える工数は 6。全部の施策は入らないので、優先順位を決めて進める。',
-    2: p === 'eks'
-      ? 'EKS の現行バージョンは、このスプリントの終了時点で標準サポートが終わる。'
-      : 'ステージングと開発の環境が、夜間と休日も 24 時間稼働していることに気づいた。',
-    3: '開発チームから「Spot を使うなら中断時の振る舞いを確認したい」と相談があった。',
-    4: '最終スプリント。次の四半期の予算はこのスプリント終了時点の月額で決まる。',
-  }[S.sprint];
-  pushLog('info', msg);
+  const b = [];
+  if (q === 1) {
+    b.push({ who: 'cfo', text: `先月のコンテナ基盤の請求は ${fmtUsd(S.baseline)}（${fmtJpy(S.baseline)}）。1 年かけてでいいので、きちんと下げてほしい。` });
+    b.push({ who: 'pm', text: `1 四半期に使える工数は ${EFFORT_PER_QUARTER}（2 名 × 3 か月）。全部はできないから、順番を決めて進めよう。` });
+    b.push({ who: 'po', text: 'コストを下げるのは賛成。ただ、利用者に迷惑がかかる障害だけは避けてほしい。' });
+  } else if (q === 2) {
+    if (p === 'eks') b.push({ who: 'pm', text: 'EKS の現行バージョンは、この四半期の終わりで標準サポートが切れる。更新を計画に入れておいて。' });
+    b.push({ who: 'po', text: 'ステージングと開発が、夜間も休日も 24 時間動いていると聞いた。誰も使っていない時間は止められない？' });
+  } else if (q === 3) {
+    b.push({ who: 'tl', text: 'Spot やオートスケーリングを使うなら、タスクが止められたときの振る舞い（SIGTERM）を先に確認したい。' });
+    if (hasApplied('visibility')) b.push({ who: 'cfo', text: '内訳が見えるようになって助かる。効果の大きいところから手を付けてほしい。' });
+    else b.push({ who: 'cfo', text: '請求書には合計しか載っていない。何にいくらかかっているのか、説明できるようにしてほしい。' });
+  } else {
+    b.push({ who: 'cfo', text: '来年度の予算は、この四半期末の月額で決める。' });
+    b.push({ who: 'pm', text: '最後の四半期。工数は今期で使い切ろう。' });
+  }
+  S.briefing = b;
+  b.forEach((m) => pushLog('info', m.text, 0, m.who));
 }
 
 // ---- 状態の問い合わせ ----
@@ -51,14 +65,14 @@ function availability(m) {
   const p = S.platform;
   const na = measureNa(m, p);
   if (na) return { ok: false, reason: na };
-  if (hasApplied(m.id)) return { ok: false, reason: `Sprint ${S.appliedAt[m.id]} で導入済み`, done: true };
+  if (hasApplied(m.id)) return { ok: false, reason: `${qName(S.appliedAt[m.id])}に導入済み`, done: true };
   if (m.excludes && m.excludes.some(hasAny)) return { ok: false, reason: `「${measureName(MEASURE_BY_ID[m.excludes[0]], p)}」と同時に選べない` };
   if (m.requires && !m.requires.every(hasAny)) return { ok: false, reason: `前提: ${m.requires.map((r) => measureName(MEASURE_BY_ID[r], p)).join('、')}` };
-  if (!S.pending.has(m.id) && effortUsed() + m.effort > EFFORT_PER_SPRINT) return { ok: false, reason: '今スプリントの工数が足りない' };
+  if (!S.pending.has(m.id) && effortUsed() + m.effort > EFFORT_PER_QUARTER) return { ok: false, reason: 'この四半期の工数が足りない' };
   return { ok: true };
 }
 
-// 現在の状態（今スプリントの選択を含む）に施策を 1 つ加えたときの月額差
+// 現在の状態（この四半期の選択を含む）に施策を 1 つ加えたときの月額差
 function estimateDelta(id) {
   const withPending = new Set([...S.applied, ...S.pending]);
   const base = { ...S, applied: withPending };
@@ -87,71 +101,88 @@ function togglePending(id) {
   render();
 }
 
-function endSprint() {
-  const s = S.sprint;
+function endQuarter() {
+  const q = S.quarter;
   const p = S.platform;
   const before = current().total;
+  const leftover = EFFORT_PER_QUARTER - effortUsed();
   const newly = [...S.pending];
-  newly.forEach((id) => { S.applied.add(id); S.appliedAt[id] = s; });
+  newly.forEach((id) => { S.applied.add(id); S.appliedAt[id] = q; });
   S.pending.clear();
   const events = [];
-  const ev = (kind, text, rel = 0) => {
-    if (rel) S.reliability = Math.max(0, S.reliability + rel);
-    events.push({ kind, text, rel });
+  let drop = 0;
+  const ev = (who, kind, text, rel = 0) => {
+    if (rel < 0) drop += rel;
+    if (rel) {
+      const prev = S.reliability;
+      S.reliability = Math.min(100, Math.max(0, S.reliability + rel));
+      rel = S.reliability - prev; // 上限・下限で丸めた実際の増減
+    }
+    events.push({ who, kind, text, rel });
   };
   const isNew = (id) => newly.includes(id);
+
+  if (newly.length === 0) ev('pm', 'info', 'この四半期は何も導入しなかった。工数は翌期に持ち越せない。');
+  else if (leftover > 0) ev('pm', 'info', `工数が ${leftover} 余った。工数は翌期に持ち越せない。`);
 
   if (isNew('sp')) {
     S.spCommit = prodUsage(p, hasApplied);
     S.spReported = S.spCommit;
-    ev('info', `Savings Plans を購入した。コミット額は現在の本番利用額 ${fmtUsd(S.spCommit)}/月 の 80%（${fmtUsd(S.spCommit * PRICE.spRate)}/月）。`);
+    ev('cfo', 'info', `Savings Plans の契約を承認した。コミット額は今の本番利用額 ${fmtUsd(S.spCommit)}/月 の 80%（${fmtUsd(S.spCommit * PRICE.spRate)}/月）で 1 年間固定になる。`);
   }
   if (isNew('visibility')) {
     const it = current().items;
     const top = COST_ITEMS.map((c) => ({ ...c, v: it[c.id] })).sort((a, b) => b.v - a.v).slice(0, 2);
-    ev('good', `コストの内訳が見えるようになった。大きい項目は「${top[0].name}」${fmtUsd(top[0].v)} と「${top[1].name}」${fmtUsd(top[1].v)}。`);
+    ev('cfo', 'good', `内訳が見えるようになった。大きいのは「${top[0].name}」${fmtUsd(top[0].v)} と「${top[1].name}」${fmtUsd(top[1].v)} だね。`);
   }
   if (isNew('rightsize') && !hasApplied('visibility')) {
-    ev('bad', 'メトリクスを見ずにサイズを縮小したため、ピーク時に API タスクがメモリ不足で再起動した。COST06 はデータとメトリクスに基づく選定を求めている。', -15);
+    ev('po', 'bad', 'ピーク時に API がメモリ不足で再起動して、利用者から問い合わせが来た。サイズはメトリクスを見て決めてほしい（COST06）。', RELIABILITY.noMetricsRightsize);
   }
   if (isNew('prodSpot')) {
-    ev('bad', '本番に Spot を入れた。中断が重なると本番の処理能力が落ちる。Spot は中断に強いバッチや開発・ステージング向け。', -15);
+    ev('po', 'bad', '本番まで Spot にしたの？ 中断が重なったら本番の処理能力が落ちる。Spot は中断に強いバッチや開発・ステージング向けのはず。', RELIABILITY.prodSpot);
   }
   if (isNew('natSingle')) {
-    ev('bad', 'NAT ゲートウェイを 1 台にした結果、本番が単一 AZ に依存する構成になった。資料の試算でも本番は 2 台で冗長性を維持している。', -20);
+    ev('tl', 'bad', 'NAT ゲートウェイが 1 台だと、その AZ が落ちたら本番も外に出られない。資料の試算でも本番は 2 台で冗長性を残している。', RELIABILITY.natSingle);
   }
   if (isNew('ecrIf')) {
     const d = computeCost(S).items.endpoint;
-    ev('bad', `インターフェイスエンドポイントの時間料金（AZ 単位で課金）で ${fmtUsd(d)}/月 かかるようになった。NAT 経由の転送が月約 790GB を超えるまでは NAT の方が安い。` +
+    ev('cfo', 'bad', `エンドポイントの請求が ${fmtUsd(d)}/月 増えている。時間料金が AZ 単位でかかるので、NAT 経由が月約 790GB を超えるまでは NAT の方が安いらしい。` +
       (hasApplied('s3gw') ? ' イメージ取得はすでに S3 ゲートウェイエンドポイントで NAT から外れている。' : ''));
   }
   if (isNew('azOpt')) {
-    ev('info', `AZ 間転送が月 ${fmtUsd(TRAFFIC.azGb * 0.6 * PRICE.azGb)} 減った。この規模では効果が小さく、品質上の理由がなければ後回しでよい施策。`);
+    ev('tl', 'info', `AZ 間転送は月 ${fmtUsd(TRAFFIC.azGb * 0.6 * PRICE.azGb)} 減った。この規模だと効果は小さいので、品質上の理由がなければ後回しでもよかった。`);
   }
   if (isNew('consolidate')) {
-    ev('good', '非本番環境を集約した。共有 VPC になったので NAT ゲートウェイの台数も見直せる。');
+    ev('pm', 'good', '非本番環境を集約できた。共有 VPC になったので、NAT ゲートウェイの台数も見直せる。');
+  }
+  if (isNew('sigterm') && S.shutdownIncidents) {
+    S.shutdownIncidents = false;
+    ev('tl', 'good', 'SIGTERM を受けたら処理を終えてから止まるようにした。中断やスケールインで処理が切れる障害は、これで止まるはず。', RELIABILITY.sigtermFix);
   }
 
   if (hasApplied('spotNonprod') && !hasApplied('sigterm')) {
-    ev('bad', 'Spot の中断通知（2 分前）を処理できず、ステージングのジョブが途中で終了した。SIGTERM 対応が前提（CONTAINER_BUILD_COST_05）。', -10);
+    S.shutdownIncidents = true;
+    ev('tl', 'bad', 'Spot の中断通知（2 分前）を処理できず、ステージングのジョブが途中で落ちた。SIGTERM 対応が前提（CONTAINER_BUILD_COST_05）。', RELIABILITY.spotNoSigterm);
   }
   if (hasApplied('prodSpot') && !hasApplied('sigterm')) {
-    ev('bad', '本番タスクが Spot 中断で強制終了し、処理中のリクエストが失敗した。', -10);
+    S.shutdownIncidents = true;
+    ev('po', 'bad', '本番タスクが Spot の中断で強制終了して、処理中のリクエストが失敗した。', RELIABILITY.prodSpotNoSigterm);
   }
   if (hasApplied('rightsize') && !hasApplied('sigterm')) {
-    ev('bad', 'スケールインのたびに処理中のリクエストが切断されている。', -5);
+    S.shutdownIncidents = true;
+    ev('po', 'bad', 'スケールインのたびに、処理中のリクエストが切断されている。', RELIABILITY.scaleInNoSigterm);
   }
 
   if (p === 'eks') {
-    if (s === 2 && !hasApplied('eksUpgrade')) {
+    if (q === 2 && !hasApplied('eksUpgrade')) {
       S.eksExtended = true;
       const n = hasApplied('consolidate') ? 2 : 3;
-      ev('bad', `EKS の標準サポートが終了し、延長サポート（$0.60/時）に移行した。${n} クラスタで月 ${fmtUsd(n * 0.5 * PRICE.H)} 増える。`);
+      ev('cfo', 'bad', `EKS が延長サポート（$0.60/時）に切り替わって、${n} クラスタで月 ${fmtUsd(n * 0.5 * PRICE.H)} 増えた。どういうこと？`);
     } else if (S.eksExtended && hasApplied('eksUpgrade')) {
       S.eksExtended = false;
-      ev('good', 'バージョンを更新して標準サポート料金に戻った。');
+      ev('tl', 'good', 'バージョンを更新して、標準サポート料金に戻した。');
     } else if (isNew('eksUpgrade')) {
-      ev('good', '標準サポート終了の前にバージョンを更新した。延長サポート料金を回避。');
+      ev('pm', 'good', '標準サポートが切れる前にバージョンを更新できた。延長サポート料金を回避。');
     }
   }
 
@@ -159,36 +190,47 @@ function endSprint() {
     const usage = prodUsage(p, hasApplied);
     if (usage < S.spReported - 0.5) {
       const waste = (S.spCommit - usage) * PRICE.spRate;
-      ev('bad', `本番の利用額が ${fmtUsd(usage)}/月 に下がったが、Savings Plans のコミットは購入時の ${fmtUsd(S.spCommit)}/月 基準のまま。月 ${fmtUsd(waste)} 分のコミットが余っている。ライトサイジングを先に行うべきだった。`);
+      ev('cfo', 'bad', `本番の利用額は ${fmtUsd(usage)}/月 に下がったのに、Savings Plans は購入時の ${fmtUsd(S.spCommit)}/月 基準のまま。月 ${fmtUsd(waste)} 分のコミットが余っている。サイズを先に見直すべきだった。`);
       S.spReported = usage;
     }
   }
 
-  const after = current().total;
-  S.history.push({ label: `S${s}`, total: after });
-  events.unshift({ kind: 'summary', text: `月額 ${fmtUsd(before)} → ${fmtUsd(after)}（${after <= before ? '−' : '+'}${fmtUsd(Math.abs(before - after))}）` });
-  events.forEach((e) => pushLog(e.kind, e.text, e.rel));
+  if (drop === 0 && S.reliability < 100) {
+    ev('po', 'good', `この四半期は障害がなかった。振り返りと改善が進んで、運用が安定してきた。`, RELIABILITY.quietQuarter);
+  }
 
-  showDialog(`Sprint ${s} の結果`, events, () => {
-    if (s >= SPRINTS) { showResult(); return; }
-    S.sprint += 1;
-    sprintIntro();
+  const after = current().total;
+  S.history.push({ label: `Q${q}`, total: after });
+  events.forEach((e) => pushLog(e.kind, e.text, e.rel, e.who));
+  const summary = `月額 ${fmtUsd(before)} → ${fmtUsd(after)}（${after <= before ? '−' : '+'}${fmtUsd(Math.abs(before - after))}）　信頼性スコア ${S.reliability}`;
+
+  showDialog(`${qName(q)}（${qRange(q)}）の結果`, summary, events, () => {
+    if (q >= QUARTERS) { showResult(); return; }
+    S.quarter += 1;
+    quarterBriefing();
     render();
   });
   render();
 }
 
-function pushLog(kind, text, rel = 0) {
-  if (kind === 'summary') return;
-  S.log.unshift({ sprint: S.sprint, kind, text, rel });
+function pushLog(kind, text, rel = 0, who = null) {
+  S.log.unshift({ quarter: S.quarter, kind, text, rel, who });
 }
 
 // ---- 描画 ----
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const relText = (rel) => (rel ? ` <b class="${rel > 0 ? 'plus' : ''}">信頼性 ${rel > 0 ? '+' : ''}${rel}</b>` : '');
+
+function avatar(who, size = 'md') {
+  if (!who) return '';
+  const c = CHARACTERS[who];
+  return `<img class="avatar ${size}" src="${c.img}" alt="${esc(c.role)} ${esc(c.name)}">`;
+}
 
 function show(screen) {
   for (const id of ['title', 'game', 'result', 'shared']) $('#' + id).hidden = id !== screen;
+  document.body.dataset.screen = screen;
   window.scrollTo(0, 0);
 }
 
@@ -197,23 +239,41 @@ function render() {
   const c = current();
   const reduction = 1 - c.total / S.baseline;
   $('#hdr-platform').innerHTML = `<img src="${ICON(pf.icon)}" alt=""> ${esc(pf.name)}`;
-  $('#hdr-sprint').textContent = `Sprint ${S.sprint} / ${SPRINTS}`;
+  $('#hdr-quarter').textContent = `${qName(S.quarter)}（${qRange(S.quarter)}）`;
   $('#m-total').textContent = fmtUsd(c.total);
   $('#m-total-sub').textContent = fmtJpy(c.total) + ' / 月';
   $('#m-red').textContent = (reduction * 100).toFixed(1) + '%';
   $('#m-red-sub').textContent = `開始時 ${fmtUsd(S.baseline)}`;
   $('#m-rel').textContent = S.reliability;
   $('#m-rel').className = 'metric-value ' + (S.reliability >= 90 ? '' : S.reliability >= 70 ? 'warn' : 'bad');
-  $('#m-effort').textContent = `${EFFORT_PER_SPRINT - effortUsed()} / ${EFFORT_PER_SPRINT}`;
+  $('#m-effort').textContent = `${EFFORT_PER_QUARTER - effortUsed()} / ${EFFORT_PER_QUARTER}`;
+  $('#m-period').textContent = `${S.quarter} / ${QUARTERS}`;
+  renderTimeline();
+  renderBriefing();
   renderDiagram();
   renderBreakdown(c);
   renderHistory();
   renderMeasures();
   renderLog();
-  $('#btn-end').textContent = S.sprint >= SPRINTS ? `Sprint ${S.sprint} を終了して結果を見る` : `Sprint ${S.sprint} を終了`;
+  $('#btn-end').textContent = S.quarter >= QUARTERS ? `${qName(S.quarter)}を終えて 1 年間の結果を見る` : `${qName(S.quarter)}を終える`;
   $('#pending-note').textContent = S.pending.size
-    ? `選択中 ${S.pending.size} 件・工数 ${effortUsed()}`
+    ? `選択中 ${S.pending.size} 件・工数 ${effortUsed()} / ${EFFORT_PER_QUARTER}`
     : '施策が選ばれていません';
+}
+
+function renderTimeline() {
+  $('#timeline').innerHTML = Array.from({ length: QUARTERS }, (_, i) => {
+    const q = i + 1;
+    const st = q < S.quarter ? 'past' : q === S.quarter ? 'now' : '';
+    return `<li class="${st}" ${q === S.quarter ? 'aria-current="step"' : ''}><span class="tq">Q${q}</span><span class="tr">${qRange(q)}</span></li>`;
+  }).join('');
+}
+
+function renderBriefing() {
+  $('#briefing').innerHTML = S.briefing.map((m) => `
+    <li class="say">${avatar(m.who)}
+      <div class="bubble"><div class="who">${esc(charLabel(m.who))}</div><p>${esc(m.text)}</p></div>
+    </li>`).join('');
 }
 
 function renderBreakdown(c) {
@@ -239,10 +299,10 @@ function renderHistory() {
   const h = S.history;
   const W = 320, Hh = 120, pad = 28;
   const max = Math.max(...h.map((x) => x.total)) * 1.1;
-  const bw = (W - pad) / (SPRINTS + 1);
-  const bars = Array.from({ length: SPRINTS + 1 }, (_, i) => {
+  const bw = (W - pad) / (QUARTERS + 1);
+  const bars = Array.from({ length: QUARTERS + 1 }, (_, i) => {
     const x = pad + i * bw + bw * 0.2;
-    const lbl = i === 0 ? '開始' : `S${i}`;
+    const lbl = i === 0 ? '開始' : `Q${i}末`;
     const it = h[i];
     if (!it) return `<text x="${x + bw * 0.3}" y="${Hh - 4}" class="ax" text-anchor="middle">${lbl}</text>`;
     const bh = (it.total / max) * (Hh - 24);
@@ -250,16 +310,17 @@ function renderHistory() {
       <text x="${x + bw * 0.3}" y="${Hh - 20 - bh}" class="val" text-anchor="middle">${Math.round(it.total).toLocaleString()}</text>
       <text x="${x + bw * 0.3}" y="${Hh - 4}" class="ax" text-anchor="middle">${lbl}</text>`;
   }).join('');
-  $('#history').innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="月額の推移"><line x1="${pad}" x2="${W}" y1="${Hh - 16}" y2="${Hh - 16}" class="axis"/>${bars}<text x="0" y="12" class="ax">USD</text></svg>`;
+  $('#history').innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="月額の推移"><line x1="${pad}" x2="${W}" y1="${Hh - 16}" y2="${Hh - 16}" class="axis"/>${bars}<text x="0" y="12" class="ax">USD/月</text></svg>`;
 }
 
 function renderMeasures() {
   const p = S.platform;
   const visible = hasApplied('visibility');
   let html = '';
-  for (const ph of [1, 2, 3, 4]) {
-    const list = MEASURES.filter((m) => m.phase === ph && (!m.only || m.only.includes(p)));
-    html += `<tbody><tr class="phase"><th colspan="5">${ph}. ${PHASES[ph]}</th></tr>`;
+  CATEGORIES.forEach((cat, ci) => {
+    const list = MEASURES.filter((m) => m.cat === cat.id && (!m.only || m.only.includes(p)));
+    if (!list.length) return;
+    html += `<tbody><tr class="phase"><th colspan="5">${ci + 1}. ${esc(cat.name)}<span>${esc(cat.ref)}</span></th></tr>`;
     for (const m of list) {
       const av = availability(m);
       const sel = S.pending.has(m.id);
@@ -284,7 +345,7 @@ function renderMeasures() {
         <td class="num est">${est}</td></tr>`;
     }
     html += '</tbody>';
-  }
+  });
   $('#measures').innerHTML = `<thead><tr><th></th><th></th><th>施策</th><th class="num">工数</th><th class="num">試算（月）</th></tr></thead>${html}`;
   $('#measures').querySelectorAll('tr.m').forEach((tr) => {
     if (tr.getAttribute('aria-disabled') === 'true' || tr.classList.contains('done')) return;
@@ -294,8 +355,8 @@ function renderMeasures() {
 }
 
 function renderLog() {
-  $('#log').innerHTML = S.log.slice(0, 30).map((l) =>
-    `<li class="${l.kind}"><span class="ls">S${l.sprint}</span><span class="lt">${esc(l.text)}${l.rel ? ` <b>信頼性 ${l.rel}</b>` : ''}</span></li>`).join('');
+  $('#log').innerHTML = S.log.slice(0, 40).map((l) =>
+    `<li class="${l.kind}"><span class="ls">Q${l.quarter}</span>${avatar(l.who, 'sm')}<span class="lt">${l.who ? `<span class="lw">${esc(CHARACTERS[l.who].role)}</span>` : ''}${esc(l.text)}${relText(l.rel)}</span></li>`).join('');
 }
 
 // 構成図
@@ -393,12 +454,15 @@ function renderDiagram() {
 }
 
 // ---- ダイアログ ----
-function showDialog(title, events, onClose) {
+function showDialog(title, summary, events, onClose) {
   const d = $('#dialog');
   $('#dlg-title').textContent = title;
-  $('#dlg-body').innerHTML = events.map((e) =>
-    `<li class="${e.kind}">${esc(e.text)}${e.rel ? ` <b>信頼性 ${e.rel}</b>` : ''}</li>`).join('');
-  $('#dlg-ok').textContent = S.sprint >= SPRINTS ? '結果を見る' : `Sprint ${S.sprint + 1} へ`;
+  $('#dlg-summary').textContent = summary;
+  $('#dlg-body').innerHTML = events.length
+    ? events.map((e) => `<li class="say ${e.kind}">${avatar(e.who)}
+        <div class="bubble"><div class="who">${esc(charLabel(e.who))}</div><p>${esc(e.text)}${relText(e.rel)}</p></div></li>`).join('')
+    : '<li class="quiet">特に報告はなかった。</li>';
+  $('#dlg-ok').textContent = S.quarter >= QUARTERS ? '1 年間の結果を見る' : `${qName(S.quarter + 1)}へ`;
   $('#dlg-ok').onclick = () => { d.close(); onClose(); };
   d.showModal();
 }
@@ -413,54 +477,41 @@ function showResult() {
   const refSaved = S.baseline - ref.total;
   const achieve = saved / refSaved;
   const rel = S.reliability;
-  let rank;
-  if (achieve >= 0.95 && rel >= 90) rank = 'S';
-  else if (achieve >= 0.8 && rel >= 75) rank = 'A';
-  else if (achieve >= 0.6 && rel >= 60) rank = 'B';
-  else rank = 'C';
-  const rankText = {
-    S: '資料の推奨プランと同等の削減を、信頼性を落とさずに達成した。',
-    A: '大きな削減を実現した。順番や前提条件を見直せばさらに伸ばせる。',
-    B: '一定の削減はできたが、効果の大きい施策の取りこぼしか、信頼性の低下がある。',
-    C: '削減が不十分か、信頼性の低下が大きい。可視化から順に進めてみよう。',
+  const rank = rankOf(achieve, rel);
+  const comment = {
+    S: { who: 'cfo', text: rel >= 100 ? '資料の推奨プランと同じ水準まで下がった。しかも障害なし。来年度の予算はこれでいこう。' : '資料の推奨プランと同じ水準まで下がった。途中の障害も立て直せたね。来年度の予算はこれでいこう。' },
+    A: { who: 'cfo', text: 'かなり下がった。順番や前提条件を見直せば、まだ伸ばせそうだね。' },
+    B: { who: 'po', text: 'コストは下がったけれど、効果の大きい施策の取りこぼしか、障害の影響が気になる。' },
+    C: { who: 'pm', text: '削減が足りないか、障害が多すぎた。次は可視化から順番に進めよう。' },
   }[rank];
 
   const done = DOC_PLAN[p].map((id) => {
     const m = MEASURE_BY_ID[id];
     const at = S.appliedAt[id];
-    return `<tr><td>${esc(measureName(m, p))}</td><td>${m.refs.map(esc).join('<br>')}</td><td class="num">${at ? 'S' + at : '<span class="up">未導入</span>'}</td></tr>`;
+    return `<tr><td>${esc(measureName(m, p))}</td><td>${esc(CATEGORY_BY_ID[m.cat].name)}</td><td class="num">${at ? 'Q' + at : '<span class="up">未導入</span>'}</td></tr>`;
   }).join('');
   const extras = [...S.applied].filter((id) => !DOC_PLAN[p].includes(id)).map((id) =>
-    `<tr><td>${esc(measureName(MEASURE_BY_ID[id], p))}</td><td class="num">S${S.appliedAt[id]}</td></tr>`).join('');
+    `<tr><td>${esc(measureName(MEASURE_BY_ID[id], p))}</td><td class="num">Q${S.appliedAt[id]}</td></tr>`).join('');
 
   $('#result-body').innerHTML = `
     <div class="result-head">
       <div class="rank rank-${rank}">${rank}</div>
-      <div><h2>${esc(pf.name)} の結果</h2><p>${rankText}</p></div>
+      <div><h2>${esc(pf.name)}・1 年間の結果</h2>
+        <div class="say inline">${avatar(comment.who)}<div class="bubble"><div class="who">${esc(charLabel(comment.who))}</div><p>${esc(comment.text)}</p></div></div>
+      </div>
     </div>
     <table class="tbl kv">
       <tr><th>開始時の月額</th><td class="num">${fmtUsd(S.baseline)}</td><td>${fmtJpy(S.baseline)}</td></tr>
-      <tr><th>最終の月額</th><td class="num">${fmtUsd(c.total)}</td><td>${fmtJpy(c.total)}</td></tr>
+      <tr><th>1 年後の月額</th><td class="num">${fmtUsd(c.total)}</td><td>${fmtJpy(c.total)}</td></tr>
       <tr><th>削減率</th><td class="num">${((saved / S.baseline) * 100).toFixed(1)}%</td><td>年間 ${fmtUsd(saved * 12)}（${fmtJpy(saved * 12)}）</td></tr>
       <tr><th>資料の推奨プラン</th><td class="num">${fmtUsd(ref.total)}</td><td>削減率 ${((refSaved / S.baseline) * 100).toFixed(1)}%（資料の試算: ${fmtUsd(pf.docBefore)} → ${fmtUsd(pf.docAfter)}）</td></tr>
       <tr><th>推奨プラン比の達成率</th><td class="num">${(achieve * 100).toFixed(0)}%</td><td></td></tr>
-      <tr><th>信頼性スコア</th><td class="num">${rel}</td><td>${rel >= 90 ? '問題なし' : '障害や冗長性の低下が発生した'}</td></tr>
+      <tr><th>信頼性スコア</th><td class="num">${rel}</td><td>${rel >= 90 ? '問題なし' : '障害や冗長性の低下が発生した'}（<a href="guide.html#reliability" target="_blank" rel="noopener">スコアの説明</a>）</td></tr>
     </table>
-    <h3>資料の推奨施策と導入タイミング</h3>
-    <table class="tbl"><thead><tr><th>施策</th><th>Well-Architected</th><th class="num">導入</th></tr></thead><tbody>${done}</tbody></table>
+    <h3>資料の推奨施策と導入した四半期</h3>
+    <table class="tbl"><thead><tr><th>施策</th><th>分類</th><th class="num">導入</th></tr></thead><tbody>${done}</tbody></table>
     ${extras ? `<h3>推奨プラン外で導入した施策</h3><table class="tbl"><tbody>${extras}</tbody></table>` : ''}
-    <h3>この規模での判断ポイント（資料より）</h3>
-    <ul class="points">
-      <li>効果が大きい: 非本番環境の集約と夜間・休日停止、NAT ゲートウェイの台数削減、ECR ライフサイクルポリシー。</li>
-      <li>効果が小さい: AZ 間転送の最適化（月 $2.4）。品質上の理由がなければ後回しでよい。</li>
-      <li>入れない方がよい: ECR 用インターフェイス VPC エンドポイント。NAT 経由が月約 790GB を超えるまでは NAT の方が安い。</li>
-      <li>NAT ゲートウェイの AZ ごと追加は、AZ 間転送が月約 2.3TB 以上ないと元が取れない（東京、追加 1 台 月約 $45）。</li>
-      <li>割引率: EC2 Spot は最大 90%、Fargate Spot は最大 70%。Compute Savings Plans は最大 66%、Fargate には最大 50%。</li>
-      <li>EKS はバージョン更新を先送りすると延長サポートで 1 クラスタ月約 $365 増える。</li>
-      <li>パブリック IPv4 は 1 アドレス $0.005/時。プライベートサブネット化で削減できる。</li>
-      <li>コスト面だけなら、この規模では ECS on Fargate が最も安い。ROSA は OpenShift が必要な理由がある場合に選ぶ。</li>
-    </ul>
-    <p class="muted small">単価は資料の前提（東京リージョン、1 ドル = 150 円）に基づく概算。「要確認」の単価は AWS Pricing Calculator で再計算すること。</p>`;
+    <p class="small">施策ごとの解説と、この規模での判断ポイントは <a href="guide.html#points" target="_blank" rel="noopener">解説ページ</a> にまとめている。</p>`;
   $('#share-text').value = shareText({ platformId: p, rank, before: S.baseline, after: c.total, rel });
   updateShareCount();
   show('result');
@@ -557,21 +608,48 @@ async function copyShareText() {
 
 // ---- タイトル ----
 function renderTitle() {
-  $('#platforms').innerHTML = Object.values(PLATFORMS).map((pf) => {
-    const b = costOf(pf.id, []).total;
-    return `<button class="pf" data-p="${pf.id}">
-      <img src="${ICON(pf.icon)}" alt="">
-      <span class="pf-name">${esc(pf.name)}</span>
-      <span class="pf-blurb">${esc(pf.blurb)}</span>
-      <span class="pf-cost">開始時の月額 <b>${fmtUsd(b)}</b></span>
-    </button>`;
-  }).join('');
-  document.querySelectorAll('.pf').forEach((b) => b.addEventListener('click', () => newGame(b.dataset.p)));
+  const eks = costOf('eks', []);
+  const eksRef = costOf('eks', DOC_PLAN.eks);
+  const it = eks.items;
+  const lines = [
+    { icon: 'nat-gateway', name: 'NAT ゲートウェイ × 6', v: it.nat },
+    { icon: 'eks', name: 'コントロールプレーン × 3', v: it.cp },
+    { icon: 'ec2-instance', name: '本番コンピュート', v: it.prod },
+    { icon: 'ec2-instance', name: '非本番コンピュート（24 時間稼働）', v: it.nonprod },
+    { icon: 'alb', name: 'ALB × 3', v: it.alb },
+    { icon: 'ecr', name: 'ECR・データ転送', v: it.ecr + it.az + it.inet + it.endpoint },
+  ];
+  $('#invoice-lines').innerHTML = lines.map((l) =>
+    `<li><img src="${ICON(l.icon)}" alt=""><span>${esc(l.name)}</span><span class="num">${fmtUsd(l.v)}</span></li>`).join('');
+  $('#invoice-total').textContent = fmtUsd(eks.total);
+  $('#hero-bill').textContent = fmtUsd(eks.total);
+  $('#invoice-target').textContent = `−${Math.round((1 - eksRef.total / eks.total) * 100)}%`;
+
+  $('#people').innerHTML = Object.values(CHARACTERS).map((c) => `
+    <article class="person">
+      <img src="${c.img}" alt="${esc(c.role)} ${esc(c.name)}のイラスト">
+      <div><div class="person-role">${esc(c.role)}</div><div class="person-name">${esc(c.name)}</div></div>
+      <p>${esc(c.desc)}</p>
+      <div class="person-focus"><span>関心: ${esc(c.focus)}</span></div>
+    </article>`).join('');
+
+  $('#platforms').innerHTML = Object.values(PLATFORMS).map((pf) => `
+    <article class="pf">
+      <div class="pf-head"><img src="${ICON(pf.icon)}" alt=""><h3>${esc(pf.name)}</h3></div>
+      <p>${esc(pf.blurb)}</p>
+      <div class="pf-cost"><span>開始時の月額</span><b>${fmtUsd(costOf(pf.id, []).total)}</b></div>
+      <button type="button" class="btn dark" data-p="${pf.id}">このプラットフォームで始める</button>
+    </article>`).join('');
+  document.querySelectorAll('#platforms [data-p]').forEach((b) => b.addEventListener('click', () => newGame(b.dataset.p)));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   renderTitle();
-  $('#btn-end').addEventListener('click', endSprint);
+  $('#btn-end').addEventListener('click', endQuarter);
+  const relItem = (r) => `<li>${esc(r.when)}: ${r.delta > 0 ? '+' : '−'}${Math.abs(r.delta)}（${r.timing}）</li>`;
+  $('#rel-down').innerHTML = RELIABILITY_RULES.filter((r) => r.delta < 0).map(relItem).join('');
+  $('#rel-up').innerHTML = RELIABILITY_RULES.filter((r) => r.delta > 0).map(relItem).join('');
+  $('#rel-help-link').addEventListener('click', () => { $('#rel-help').open = true; });
   $('#btn-quit').addEventListener('click', () => { if (confirm('タイトルに戻りますか？進行状況は失われます。')) show('title'); });
   $('#btn-retry').addEventListener('click', () => newGame(S.platform));
   $('#btn-title').addEventListener('click', () => show('title'));

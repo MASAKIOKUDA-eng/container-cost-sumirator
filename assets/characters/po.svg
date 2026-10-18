@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="プロダクトオーナー">
+  <defs><clipPath id="c"><circle cx="60" cy="60" r="60"/></clipPath></defs>
+  <circle cx="60" cy="60" r="60" fill="#ccfbf1"/>
+  <g clip-path="url(#c)" stroke="#1f2933" stroke-width="2" stroke-linejoin="round">
+    <path d="M36 56 C34 30 50 24 60 24 C72 24 86 32 84 56 L84 74 C78 78 72 76 70 72 L50 72 C48 76 42 78 36 74 Z" fill="#6b4423"/>
+    <path d="M12 122 C14 96 32 84 60 84 C88 84 106 96 108 122 Z" fill="#0f766e"/>
+    <path d="M47 85 L60 110 L73 85 Z" fill="#f9fafb"/>
+    <circle cx="44" cy="104" r="2" fill="#f9fafb"/>
+    <circle cx="44" cy="114" r="2" fill="#f9fafb"/>
+    <path d="M51 72 L51 87 Q60 92 69 87 L69 72 Z" fill="#c68b5b"/>
+    <ellipse cx="60" cy="54" rx="19" ry="22" fill="#c68b5b"/>
+    <path d="M40 51 C42 34 56 30 62 31 C74 32 80 40 80 51 C72 44 62 41 52 44 C47 46 43 48 40 51 Z" fill="#6b4423"/>
+    <circle cx="41" cy="64" r="2.5" fill="#f59e0b"/>
+    <circle cx="79" cy="64" r="2.5" fill="#f59e0b"/>
+    <circle cx="52" cy="56" r="2" fill="#1f2933" stroke="none"/>
+    <circle cx="68" cy="56" r="2" fill="#1f2933" stroke="none"/>
+    <path d="M53 65 Q60 71 67 65" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

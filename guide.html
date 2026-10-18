@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>解説｜コンテナコスト削減シミュレーター</title>
+<meta name="description" content="コンテナコスト削減シミュレーターの遊び方、登場人物、信頼性スコア、施策の分類、Well-Architected に基づく判断ポイントの解説">
+<link rel="icon" href="assets/icons/ecs.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-screen="guide">
+<header class="topbar">
+  <a class="brand" href="index.html">コンテナコスト削減シミュレーター</a>
+  <nav class="topbar-links" aria-label="外部リンク">
+    <a href="index.html">ゲームへ</a>
+    <a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator/issues" target="_blank" rel="noopener">Issue</a>
+  </nav>
+</header>
+
+<div class="guide">
+  <nav class="toc" aria-label="目次">
+    <div class="toc-h">目次</div>
+    <ol>
+      <li><a href="#about">このゲームについて</a></li>
+      <li><a href="#howto">遊び方（1 年間・四半期）</a></li>
+      <li><a href="#people">登場人物</a></li>
+      <li><a href="#reliability">信頼性スコア</a></li>
+      <li><a href="#categories">施策の分類</a></li>
+      <li><a href="#order">進める順番</a></li>
+      <li><a href="#points">この規模での判断ポイント</a></li>
+      <li><a href="#model">コストモデルと単価</a></li>
+      <li><a href="#refs">参考資料</a></li>
+    </ol>
+  </nav>
+
+  <main class="guide-body">
+    <header class="guide-head">
+      <div class="kicker">GUIDE</div>
+      <h1>解説</h1>
+      <p>ゲームの遊び方と、題材にしている AWS コンテナサービスのコスト削減（Well-Architected 準拠）の考え方をまとめる。</p>
+    </header>
+
+    <section id="about">
+      <h2>1. このゲームについて</h2>
+      <p>あなたは SaaS の SRE。利用ユーザー 1,000 名規模のサービスを、AWS 東京リージョンのコンテナ基盤で運用している。財務部長から「コンテナ基盤の費用を下げてほしい」と依頼され、1 年間で月額をどこまで下げられるかに挑む。</p>
+      <table class="tbl kv">
+        <tr><th>利用者</th><td>登録 1,000 名、1 日のアクティブ 600 名、ピーク時の同時接続 150 名</td></tr>
+        <tr><th>リクエスト</th><td>1 日約 18 万件（1 人 300 件）、ピーク約 30 件/秒</td></tr>
+        <tr><th>構成</th><td>Web（フロント/BFF）・API・ワーカーの 3 サービス。本番・ステージング・開発の 3 環境。本番は 2AZ 以上</td></tr>
+        <tr><th>転送量（月）</th><td>インターネット向け 300GB、本番の AZ 間 200GB、NAT 経由 400GB（うちイメージ取得 300GB）</td></tr>
+        <tr><th>ECR</th><td>3 サービス、イメージ保存量 300GB（未整理）</td></tr>
+        <tr><th>対象外</th><td>データベースなどコンテナ以外のリソース、作業工数の金額、消費税</td></tr>
+        <tr><th>為替</th><td>1 ドル = 150 円（仮置き）</td></tr>
+      </table>
+    </section>
+
+    <section id="howto">
+      <h2>2. 遊び方（1 年間・四半期）</h2>
+      <p>1 年間を 3 か月ごとの 4 つの四半期に分けて進める。</p>
+      <ol class="steps">
+        <li><b>プラットフォームを選ぶ。</b>ECS on Fargate / EKS on EC2 / ROSA（HCP）。開始時の月額と、使える施策が違う。</li>
+        <li><b>ブリーフィングを読む。</b>四半期の始めに、登場人物から依頼や注意が届く。</li>
+        <li><b>施策を選ぶ。</b>1 四半期の工数は 6（チーム 2 名 × 3 か月）。施策ごとに必要な工数（1〜3）が決まっていて、全部は導入できない。余った工数は翌期に持ち越せない。</li>
+        <li><b>四半期を終える。</b>選んだ施策が導入され、月額と信頼性スコアが変わる。登場人物から結果の報告が届く。</li>
+        <li><b>1 年後に評価。</b>第 4 四半期を終えた時点の月額と信頼性スコアでランク（S〜C）が決まる。</li>
+      </ol>
+      <p>「Cost Explorer / CUR でコストを可視化」を導入するまで、コスト内訳と各施策の試算額は表示されない（請求書には合計しか載っていない）。</p>
+      <table class="tbl" id="timeline-table">
+        <thead><tr><th>四半期</th><th>期間</th><th>主な出来事</th></tr></thead>
+        <tbody>
+          <tr><td>第 1 四半期</td><td>1〜3 か月目</td><td>財務部長から削減の依頼。PM が工数の配分を説明する。</td></tr>
+          <tr><td>第 2 四半期</td><td>4〜6 か月目</td><td>非本番環境の 24 時間稼働が話題になる。EKS はこの四半期末で標準サポートが終わる。</td></tr>
+          <tr><td>第 3 四半期</td><td>7〜9 か月目</td><td>テックリードから Spot・オートスケーリングの前提（SIGTERM）について相談がある。</td></tr>
+          <tr><td>第 4 四半期</td><td>10〜12 か月目</td><td>来年度の予算は、この四半期末の月額で決まる。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="people">
+      <h2>3. 登場人物</h2>
+      <p>サービスの利用者（1,000 名）のほかに、社内の 4 人が登場する。それぞれ関心ごとが違い、施策の結果に応じて発言する。</p>
+      <div id="guide-people" class="guide-people"></div>
+    </section>
+
+    <section id="reliability">
+      <h2>4. 信頼性スコア</h2>
+      <p>サービスの安定性を 0〜100 で表す指標。100 から始まり、利用者や開発チームに影響する障害、冗長性の低下で下がる。コストだけを追いかけて信頼性を落とすと、ランクが上がらない。</p>
+      <div class="example">
+        <div class="example-h">具体例</div>
+        <ol>
+          <li>第 1 四半期に、SIGTERM 対応をせずに「非本番に Spot を適用」を導入する → ステージングのジョブが中断で落ちて <b class="up">−10</b>（90）。</li>
+          <li>第 2 四半期も SIGTERM 未対応のまま → 再び <b class="up">−10</b>（80）。</li>
+          <li>第 3 四半期に「SIGTERM 対応」を導入する → 中断障害が解消して <b class="down">+10</b>（90）。この四半期は減点がないので <b class="down">+5</b>（95）。</li>
+          <li>第 4 四半期も障害なし → <b class="down">+5</b>（100）。</li>
+        </ol>
+      </div>
+      <h3>下がる要因</h3>
+      <table class="tbl"><thead><tr><th>条件</th><th class="num">増減</th><th>タイミング</th><th>起きること</th></tr></thead><tbody id="rel-down-table"></tbody></table>
+      <h3>上がる要因</h3>
+      <table class="tbl"><thead><tr><th>条件</th><th class="num">増減</th><th>タイミング</th><th>起きること</th></tr></thead><tbody id="rel-up-table"></tbody></table>
+      <h3>ランクの条件</h3>
+      <p>「推奨プラン比の達成率」は、資料の推奨施策をすべて入れた場合の削減額に対して、あなたが削減した額の割合。</p>
+      <table class="tbl"><thead><tr><th>ランク</th><th class="num">達成率</th><th class="num">信頼性スコア</th></tr></thead><tbody id="rank-table"></tbody></table>
+    </section>
+
+    <section id="categories">
+      <h2>5. 施策の分類</h2>
+      <p>施策は、Well-Architected フレームワークのコスト最適化の柱で「何を最適化するか」の領域ごとに 5 つに分けている。どの分類も、効果の大きい施策と小さい施策、すぐ効く施策と設計変更が必要な施策を含む。</p>
+      <div id="category-tables"></div>
+      <p class="small muted">工数は 1 四半期 6 のうちに占める量。「—」はそのプラットフォームでは対象外（理由は表の下の注記）。<span class="trap-mark">注意</span> は資料のレビューで「この規模では入れない方がよい」または「信頼性を落とす」とされた施策。</p>
+    </section>
+
+    <section id="order">
+      <h2>6. 進める順番</h2>
+      <p>資料では、可視化から始め、効果が早く出る施策、設計変更、ビルド改善の順に進めることを勧めている。施策の分類とは別の軸で、「いつやるか」の目安になる。</p>
+      <ol class="steps">
+        <li><b>可視化:</b> Cost Explorer / CUR で転送コストとコンピューティングコストを分解する（COST08-BP01、設計原則「支出の分析と帰属」）。</li>
+        <li><b>すぐ効く施策:</b> ECR ライフサイクルポリシー、S3 用の VPC エンドポイント、Savings Plans の購入。</li>
+        <li><b>設計変更:</b> 非本番の集約と停止、NAT ゲートウェイ配置の見直し、Spot の導入（SIGTERM 対応が前提）、ip モード・同一ゾーン優先ルーティング。</li>
+        <li><b>ビルド改善:</b> イメージ軽量化、Graviton（ARM）向けマルチアーキテクチャ対応。</li>
+      </ol>
+      <p>ゲームで気をつける順番:</p>
+      <ul>
+        <li>ライトサイジングは可視化のあとに行う（メトリクスなしで縮小すると障害になる）。</li>
+        <li>Spot とオートスケーリングは SIGTERM 対応のあとに行う。</li>
+        <li>Savings Plans はライトサイジングと Graviton 移行のあとに買う。購入時の利用額でコミット額が決まるので、先に買うとコミットが余る。</li>
+        <li>NAT ゲートウェイの削減は、非本番環境の集約（共有 VPC）が前提。</li>
+        <li>EKS は第 2 四半期末までにバージョンを更新しないと、延長サポート料金（1 クラスタ月約 $365 増）がかかる。</li>
+      </ul>
+    </section>
+
+    <section id="points">
+      <h2>7. この規模での判断ポイント</h2>
+      <ul class="points">
+        <li><b>効果が大きい:</b> 非本番環境の集約と夜間・休日停止（全プラットフォームで最大の削減項目）、NAT ゲートウェイの台数削減、ECR ライフサイクルポリシー。この規模では転送量よりも固定費（NAT ゲートウェイ、コントロールプレーン、非本番環境の常時稼働）が支配的。</li>
+        <li><b>効果が小さい:</b> AZ 間転送の最適化（月 $2.4）。トポロジー認識ルーティング等は品質上の理由がなければ後回しでよい。</li>
+        <li><b>入れない方がよい:</b> ECR 用インターフェイス VPC エンドポイント（2AZ × 2 エンドポイント）。時間料金が AZ 単位でかかるため、NAT 経由が月約 790GB を超えるまでは NAT の方が安い。イメージ取得の大半は S3 ゲートウェイエンドポイント（無料）で NAT から外せる。</li>
+        <li><b>NAT ゲートウェイの AZ ごと配置:</b> 追加 1 台の時間料金（東京で月約 $45）を相殺するには、その AZ からの AZ 間転送が月約 2.3TB 以上必要。小規模環境では集約した方が安いが、本番の冗長性は残す。</li>
+        <li><b>割引率の適用範囲:</b> Spot の「最大 90%」は EC2 Spot の値で、Fargate Spot は最大 70%。Compute Savings Plans の「最大 66%」は EC2 を含む上限で、Fargate には最大 50%。ゲームでは Savings Plans 20%、Spot 60% と控えめに試算している。</li>
+        <li><b>EKS 延長サポート:</b> 標準サポート $0.10/時に対し延長サポートは $0.60/時。バージョン更新を怠ると 1 クラスタ月約 $365 増える。</li>
+        <li><b>パブリック IPv4:</b> パブリック IP を持つ Fargate タスクやノードには 1 アドレス $0.005/時が課金される。プライベートサブネット化で削減できる。</li>
+        <li><b>ROSA:</b> ROSA サービス料金に加えて EC2・EBS・S3・ELB のインフラ料金がかかる。ワーカー料金は 4vCPU あたり $0.171/時で、1 年・3 年契約で 33〜55% 割引。EC2 Savings Plans とは別枠で契約が必要。</li>
+        <li><b>プラットフォーム選定:</b> コスト面だけなら、この規模では ECS on Fargate が最も安い。ROSA は OpenShift が必要な理由がある場合に選ぶ。</li>
+      </ul>
+    </section>
+
+    <section id="model">
+      <h2>8. コストモデルと単価</h2>
+      <p>単価と前提は、資料のコスト試算（東京リージョン）に基づく。資料の推奨施策をすべて入れると、ECS と ROSA は資料の試算と一致し、EKS は非本番ノードの EBS の扱いの差で約 $4 ずれる。「要確認」の単価は、意思決定の前に AWS Pricing Calculator で東京リージョンを選んで再計算すること。</p>
+      <table class="tbl"><thead><tr><th>プラットフォーム</th><th class="num">開始時</th><th class="num">推奨プラン</th><th class="num">削減率</th><th>資料の試算</th></tr></thead><tbody id="platform-table"></tbody></table>
+      <h3>主な単価</h3>
+      <table class="tbl"><thead><tr><th>項目</th><th>単価（東京）</th><th>確認状況</th></tr></thead>
+        <tbody>
+          <tr><td>EKS クラスタ</td><td class="num">$0.10/時（延長サポート $0.60/時）</td><td>公式料金ページで確認</td></tr>
+          <tr><td>ROSA HCP クラスタ／ワーカー</td><td class="num">$0.25/時／4vCPU あたり $0.171/時（1 年契約 年 $1,000）</td><td>公式料金ページで確認</td></tr>
+          <tr><td>パブリック IPv4</td><td class="num">$0.005/時</td><td>公式料金ページで確認</td></tr>
+          <tr><td>m7g.large</td><td class="num">$0.1054/時</td><td>m7g.xlarge の半分として算出</td></tr>
+          <tr><td>Fargate x86／ARM</td><td class="num">vCPU $0.05056・GB $0.00553／vCPU $0.04045・GB $0.00442（1 時間）</td><td>要確認</td></tr>
+          <tr><td>m6i.xlarge・m5.xlarge</td><td class="num">$0.248/時</td><td>要確認</td></tr>
+          <tr><td>NAT ゲートウェイ</td><td class="num">$0.062/時、$0.062/GB</td><td>要確認</td></tr>
+          <tr><td>ALB</td><td class="num">$0.0243/時、LCU $0.008/時</td><td>要確認</td></tr>
+          <tr><td>インターネット向け転送／EBS gp3／ECR 保存</td><td class="num">$0.114/GB／$0.096/GB 月／$0.10/GB 月</td><td>要確認</td></tr>
+          <tr><td>インターフェイス VPC エンドポイント</td><td class="num">$0.014/時（AZ ごと）、$0.01/GB</td><td>要確認</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="refs">
+      <h2>9. 参考資料</h2>
+      <ul>
+        <li><a href="https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/welcome.html" target="_blank" rel="noopener">AWS Well-Architected Framework - Cost Optimization Pillar</a></li>
+        <li><a href="https://docs.aws.amazon.com/wellarchitected/latest/container-build-lens/container-build-lens.html" target="_blank" rel="noopener">Container Build Lens</a></li>
+        <li><a href="https://docs.aws.amazon.com/eks/latest/best-practices/cost-opt.html" target="_blank" rel="noopener">EKS Best Practices Guide - Cost Optimization</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-capacity-providers.html" target="_blank" rel="noopener">Amazon ECS clusters for Fargate（Fargate Spot）</a></li>
+        <li><a href="https://aws.amazon.com/blogs/containers/understanding-data-transfer-costs-for-aws-container-services/" target="_blank" rel="noopener">Understanding data transfer costs for AWS container services（AWS 公式ブログ）</a></li>
+      </ul>
+    </section>
+  </main>
+</div>
+
+<footer class="foot wrap">
+  <p>金額は東京リージョンの概算で、実際の請求額とは異なる。AWS アイコンは AWS Architecture Icons を使用。</p>
+  <ul class="foot-links">
+    <li><a href="index.html">ゲームへ戻る</a></li>
+    <li><a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator/issues/new?template=feedback.yml" target="_blank" rel="noopener">感想・改善案を送る</a></li>
+  </ul>
+</footer>
+
+<script src="js/model.js"></script>
+<script src="js/measures.js"></script>
+<script src="js/characters.js"></script>
+<script src="js/guide.js"></script>
+</body>
+</html>
