@@ -42,7 +42,7 @@ img { display: block; }
   top: 0;
   z-index: 10;
 }
-.brand { font-weight: 700; font-size: 14px; letter-spacing: .02em; }
+.brand { font-weight: 700; font-size: 14px; letter-spacing: .02em; margin-right: auto; }
 .topbar-right { display: flex; gap: 20px; align-items: center; font-size: 13px; }
 .topbar-right img { width: 20px; height: 20px; display: inline-block; vertical-align: -5px; margin-right: 4px; }
 #hdr-platform:empty, #hdr-sprint:empty { display: none; }
@@ -221,6 +221,12 @@ dialog h2 { font-size: 16px; margin-bottom: 8px; }
 .points li { margin-bottom: 4px; }
 
 .foot { font-size: 12px; color: var(--sub); }
+.foot-links { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 20px; padding: 0; margin: 8px 0 24px; font-size: 13px; }
+.foot-links a { color: #0972d3; }
+.topbar-links { display: flex; gap: 14px; margin-left: 20px; font-size: 13px; }
+.topbar-links a { color: #d1d5db; text-decoration: none; }
+.topbar-links a:hover { color: #fff; text-decoration: underline; }
+.topbar-links a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 @media (max-width: 1100px) {
   .cols { grid-template-columns: 1fr; }
@@ -245,6 +251,7 @@ dialog h2 { font-size: 16px; margin-bottom: 8px; }
   .brand { font-size: 12px; }
   .topbar-right { gap: 10px; font-size: 12px; white-space: nowrap; }
   .topbar-right img { display: none; }
+  .topbar-links { display: none; }
   .node { width: 76px; }
   .tbl th, .tbl td { padding: 6px 4px; }
   .effort { width: 28px; }

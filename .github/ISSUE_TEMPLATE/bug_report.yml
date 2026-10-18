@@ -1,0 +1,46 @@
+name: 不具合の報告
+description: 表示の崩れ、計算の誤り、動かない操作などを報告する
+title: "[不具合] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。わかる範囲で記入してください。
+  - type: dropdown
+    id: platform
+    attributes:
+      label: プラットフォーム
+      options:
+        - ECS on Fargate
+        - EKS on EC2
+        - ROSA (HCP)
+        - タイトル画面・その他
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 起きたこと
+      description: 何が起きたか、本来どうなるべきか
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: スプリントごとに選んだ施策など
+      placeholder: |
+        1. ECS on Fargate を選ぶ
+        2. Sprint 1 で「Cost Explorer / CUR でコストを可視化」を選んで終了
+        3. ...
+  - type: input
+    id: env
+    attributes:
+      label: ブラウザ・端末
+      placeholder: 例）Chrome 141 / Windows 11、Safari / iPhone
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: スクリーンショット
+      description: あれば貼り付けてください
