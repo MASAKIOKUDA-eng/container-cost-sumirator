@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="あなた（SRE）">
+  <defs><clipPath id="c"><circle cx="60" cy="60" r="60"/></clipPath></defs>
+  <circle cx="60" cy="60" r="60" fill="#fde7d3"/>
+  <g clip-path="url(#c)" stroke="#1f2933" stroke-width="2" stroke-linejoin="round">
+    <path d="M12 122 C14 96 32 84 60 84 C88 84 106 96 108 122 Z" fill="#ec7211"/>
+    <path d="M40 86 Q60 102 80 86" fill="none"/>
+    <path d="M54 94 L53 108 M66 94 L67 108" fill="none" stroke-linecap="round"/>
+    <path d="M51 72 L51 87 Q60 92 69 87 L69 72 Z" fill="#f2c9a0"/>
+    <ellipse cx="60" cy="54" rx="20" ry="23" fill="#f2c9a0"/>
+    <path d="M40 52 C38 32 52 26 62 28 C76 28 84 38 80 54 C76 44 68 40 58 42 C50 43 44 46 40 52 Z" fill="#2b2b2b"/>
+    <path d="M37 54 C37 24 83 24 83 54" fill="none" stroke="#4b5563" stroke-width="4"/>
+    <rect x="32" y="49" width="9" height="15" rx="3" fill="#4b5563"/>
+    <rect x="79" y="49" width="9" height="15" rx="3" fill="#4b5563"/>
+    <path d="M36 64 Q38 75 50 74" fill="none" stroke="#4b5563" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="52" cy="56" r="2" fill="#1f2933" stroke="none"/>
+    <circle cx="68" cy="56" r="2" fill="#1f2933" stroke="none"/>
+    <path d="M54 65 Q60 70 66 65" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -4,8 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>コンテナコスト削減シミュレーター</title>
-<meta name="description" content="AWS コンテナサービス（ECS・EKS・ROSA）のコスト削減を Well-Architected に沿って体験するシミュレーションゲーム">
+<meta name="description" content="AWS コンテナサービス（ECS・EKS・ROSA）のコスト削減を Well-Architected に沿って 1 年間で体験するシミュレーションゲーム">
 <link rel="icon" href="assets/icons/ecs.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,46 +16,97 @@
   <div class="brand">コンテナコスト削減シミュレーター</div>
   <div class="topbar-right" id="topbar-game">
     <span id="hdr-platform"></span>
-    <span id="hdr-sprint"></span>
+    <span id="hdr-quarter"></span>
   </div>
   <nav class="topbar-links" aria-label="外部リンク">
+    <a href="guide.html" target="_blank" rel="noopener">解説</a>
     <a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator" target="_blank" rel="noopener">GitHub</a>
     <a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator/issues" target="_blank" rel="noopener">Issue</a>
   </nav>
 </header>
 
 <!-- タイトル -->
-<main id="title" class="wrap" hidden>
-  <section class="intro">
-    <h1>コンテナ基盤のコストを、4 スプリントで下げる</h1>
-    <p>あなたは SaaS の SRE。利用ユーザー 1,000 名規模のサービスを AWS 東京リージョンのコンテナ基盤で運用している。
-      Well-Architected フレームワークの「コスト最適化の柱」と Container Build Lens に沿って施策を選び、月額を下げてほしい。</p>
-    <table class="tbl kv scenario">
-      <tr><th>利用者</th><td>登録 1,000 名、1 日のアクティブ 600 名、ピーク時の同時接続 150 名</td></tr>
-      <tr><th>リクエスト</th><td>1 日約 18 万件、ピーク約 30 件/秒</td></tr>
-      <tr><th>構成</th><td>Web（フロント/BFF）・API・ワーカーの 3 サービス。本番・ステージング・開発の 3 環境。本番は 2AZ</td></tr>
-      <tr><th>転送量（月）</th><td>インターネット向け 300GB、本番の AZ 間 200GB、NAT 経由 400GB（うちイメージ取得 300GB）</td></tr>
-      <tr><th>ECR</th><td>イメージ保存量 300GB（未整理）</td></tr>
-    </table>
-    <h2>ルール</h2>
-    <ul class="rules">
-      <li>1 スプリントの工数は 6。施策ごとに必要な工数が決まっていて、全部は導入できない。</li>
-      <li>施策には前提条件や順番があり、守らないと障害が起きて信頼性スコアが下がる。</li>
-      <li>コストを可視化するまで、内訳と各施策の試算額は見えない。</li>
-      <li>4 スプリント終了時の月額と信頼性スコアで評価する。目標は資料の推奨プラン並みの削減。</li>
-    </ul>
-    <h2>プラットフォームを選ぶ</h2>
+<main id="title" hidden>
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="kicker">AWS CONTAINER COST OPTIMIZATION × WELL-ARCHITECTED</div>
+      <h1>コンテナコスト<br><span class="hl">削減</span>シミュレーター</h1>
+      <p class="lead">毎月届く請求書は <b id="hero-bill" class="num"></b>。1 年間、四半期ごとに施策を選び、財務部長、プロダクトオーナー、プロジェクトマネージャー、テックリードと一緒に月額を下げていく。</p>
+      <div class="hero-actions">
+        <a class="btn-lg primary" href="#choose">ゲームを始める</a>
+        <a class="btn-lg" href="guide.html" target="_blank" rel="noopener">解説を読む（別タブ）</a>
+      </div>
+      <dl class="hero-stats">
+        <div><dt>期間</dt><dd>1年 / 4四半期</dd></div>
+        <div><dt>施策</dt><dd>18</dd></div>
+        <div><dt>プラットフォーム</dt><dd>ECS / EKS / ROSA</dd></div>
+      </dl>
+    </div>
+    <div class="hero-art">
+      <div class="invoice" aria-label="請求書の例（EKS on EC2）">
+        <div class="invoice-h"><span class="invoice-title">請求書</span><span class="invoice-sub">INVOICE / EKS on EC2</span></div>
+        <div class="invoice-meta"><span>ご請求期間 2026年10月分</span><span>ap-northeast-1</span></div>
+        <ul id="invoice-lines" class="invoice-lines"></ul>
+        <div class="invoice-total"><span>合計（月額）</span><b id="invoice-total" class="num"></b></div>
+        <div class="stamp"><div>1年後の目標</div><b id="invoice-target"></b></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="band-inner">
+      <div class="sec-head">
+        <h2>登場人物</h2>
+        <p>四半期ごとに、それぞれの立場から依頼や指摘が届く。</p>
+      </div>
+      <div id="people" class="people"></div>
+    </div>
+  </section>
+
+  <section id="choose" class="choose">
+    <div class="sec-head">
+      <h2>プラットフォームを選ぶ</h2>
+      <p>利用ユーザー 1,000 名・本番／ステージング／開発の 3 環境（東京リージョン）</p>
+    </div>
     <div id="platforms" class="platforms"></div>
   </section>
 </main>
 
 <!-- ゲーム -->
 <main id="game" class="wrap" hidden>
+  <ol id="timeline" class="timeline" aria-label="1 年間の進行"></ol>
+
   <section class="metrics">
     <div class="metric"><div class="metric-label">月額コスト</div><div class="metric-value" id="m-total"></div><div class="metric-sub" id="m-total-sub"></div></div>
     <div class="metric"><div class="metric-label">削減率</div><div class="metric-value" id="m-red"></div><div class="metric-sub" id="m-red-sub"></div></div>
-    <div class="metric"><div class="metric-label">信頼性スコア</div><div class="metric-value" id="m-rel"></div><div class="metric-sub">100 から開始</div></div>
-    <div class="metric"><div class="metric-label">残り工数</div><div class="metric-value" id="m-effort"></div><div class="metric-sub">このスプリント</div></div>
+    <div class="metric"><div class="metric-label">信頼性スコア</div><div class="metric-value" id="m-rel"></div><div class="metric-sub"><a href="#rel-help" id="rel-help-link">スコアの説明</a></div></div>
+    <div class="metric"><div class="metric-label">残り工数（この四半期）</div><div class="metric-value" id="m-effort"></div><div class="metric-sub">2 名 × 3 か月 ＝ 6</div></div>
+    <div class="metric"><div class="metric-label">四半期</div><div class="metric-value" id="m-period"></div><div class="metric-sub">1 年間</div></div>
+  </section>
+
+  <details id="rel-help" class="help">
+    <summary>信頼性スコアとは</summary>
+    <div class="help-body">
+      <p>サービスの安定性を 0〜100 で表す。100 から始まり、利用者や開発チームに影響する障害、冗長性の低下で下がる。1 年後のランクは削減額と信頼性スコアの両方で決まる（S は 90 以上が条件）。</p>
+      <div class="help-cols">
+        <div>
+          <h3>下がる要因</h3>
+          <ul id="rel-down"></ul>
+        </div>
+        <div>
+          <h3>上がる要因</h3>
+          <ul id="rel-up"></ul>
+          <h3>具体例</h3>
+          <p>第 1 四半期に SIGTERM 対応をせずに非本番へ Spot を入れると、ステージングのジョブが中断で落ちて −10。第 2 四半期に SIGTERM 対応を入れると +10 で回復し、その後障害がなければ毎四半期 +5。</p>
+        </div>
+      </div>
+      <p><a href="guide.html#reliability" target="_blank" rel="noopener">解説ページで詳しく見る</a></p>
+    </div>
+  </details>
+
+  <section class="panel briefing-panel">
+    <h2 class="panel-h">今期のブリーフィング</h2>
+    <ul id="briefing" class="briefing"></ul>
   </section>
 
   <div class="cols">
@@ -74,7 +128,7 @@
 
   <div class="cols">
     <section class="panel">
-      <h2 class="panel-h">施策</h2>
+      <h2 class="panel-h">施策 <a class="panel-link" href="guide.html#categories" target="_blank" rel="noopener">分類の説明</a></h2>
       <table id="measures" class="tbl measures"></table>
       <div class="actionbar">
         <span id="pending-note" class="muted"></span>
@@ -121,6 +175,7 @@
 
 <dialog id="dialog">
   <h2 id="dlg-title"></h2>
+  <p id="dlg-summary" class="dlg-summary"></p>
   <ul id="dlg-body" class="events"></ul>
   <div class="actionbar"><button id="dlg-ok" class="btn primary"></button></div>
 </dialog>
@@ -129,6 +184,7 @@
   <p>参考: AWS Well-Architected Framework コスト最適化の柱（COST05〜COST09）、Container Build Lens、EKS Best Practices Guide。
     金額は東京リージョンの概算で、実際の請求額とは異なる。AWS アイコンは AWS Architecture Icons を使用。</p>
   <ul class="foot-links">
+    <li><a href="guide.html" target="_blank" rel="noopener">解説ページ</a></li>
     <li><a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator" target="_blank" rel="noopener">GitHub リポジトリ</a></li>
     <li><a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator/issues/new?template=bug_report.yml" target="_blank" rel="noopener">不具合を報告する</a></li>
     <li><a href="https://github.com/MASAKIOKUDA-eng/container-cost-sumirator/issues/new?template=feedback.yml" target="_blank" rel="noopener">感想・改善案を送る</a></li>
@@ -138,6 +194,7 @@
 
 <script src="js/model.js"></script>
 <script src="js/measures.js"></script>
+<script src="js/characters.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

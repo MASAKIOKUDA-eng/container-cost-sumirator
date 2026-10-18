@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="財務部長">
+  <defs><clipPath id="c"><circle cx="60" cy="60" r="60"/></clipPath></defs>
+  <circle cx="60" cy="60" r="60" fill="#e5e7eb"/>
+  <g clip-path="url(#c)" stroke="#1f2933" stroke-width="2" stroke-linejoin="round">
+    <path d="M12 122 C14 96 32 84 60 84 C88 84 106 96 108 122 Z" fill="#1e3a5f"/>
+    <path d="M48 85 L60 106 L72 85 Z" fill="#ffffff"/>
+    <path d="M57 89 L63 89 L65 103 L60 110 L55 103 Z" fill="#b91c1c"/>
+    <path d="M51 72 L51 87 Q60 92 69 87 L69 72 Z" fill="#e0ac7e"/>
+    <ellipse cx="60" cy="54" rx="20" ry="23" fill="#e0ac7e"/>
+    <path d="M40 50 C40 30 56 26 66 29 C78 32 82 42 80 52 C74 40 60 38 48 42 C44 44 41 47 40 50 Z" fill="#9ca3af"/>
+    <rect x="44" y="51" width="13" height="9" rx="3" fill="#ffffff" fill-opacity=".4"/>
+    <rect x="63" y="51" width="13" height="9" rx="3" fill="#ffffff" fill-opacity=".4"/>
+    <path d="M57 55 L63 55" fill="none"/>
+    <circle cx="51" cy="56" r="1.8" fill="#1f2933" stroke="none"/>
+    <circle cx="69" cy="56" r="1.8" fill="#1f2933" stroke="none"/>
+    <path d="M54 67 L66 67" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>
