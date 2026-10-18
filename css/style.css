@@ -209,6 +209,15 @@ dialog h2 { font-size: 16px; margin-bottom: 8px; }
 .rank { width: 72px; height: 72px; border: 2px solid var(--ink); font-size: 40px; font-weight: 700; display: grid; place-items: center; font-family: var(--num); flex: none; }
 .rank-S { border-color: var(--accent); color: var(--accent); }
 .points { padding-left: 20px; margin: 0; }
+.share { margin-top: 24px; padding-top: 4px; border-top: 1px solid var(--line); }
+.share textarea {
+  width: 100%; font: inherit; font-size: 14px; line-height: 1.6; padding: 8px 10px;
+  border: 1px solid #7d8998; border-radius: 2px; resize: vertical; color: var(--ink); background: #fff;
+}
+.share textarea:focus { outline: 2px solid var(--sel-line); outline-offset: -1px; }
+.share .actionbar .muted { font-family: var(--num); }
+.btn.x { background: #0f1419; border-color: #0f1419; color: #fff; }
+.btn.x:hover { background: #272c30; border-color: #272c30; }
 .points li { margin-bottom: 4px; }
 
 .foot { font-size: 12px; color: var(--sub); }

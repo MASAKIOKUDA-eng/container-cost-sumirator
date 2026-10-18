@@ -461,7 +461,66 @@ function showResult() {
       <li>コスト面だけなら、この規模では ECS on Fargate が最も安い。ROSA は OpenShift が必要な理由がある場合に選ぶ。</li>
     </ul>
     <p class="muted small">単価は資料の前提（東京リージョン、1 ドル = 150 円）に基づく概算。「要確認」の単価は AWS Pricing Calculator で再計算すること。</p>`;
+  $('#share-text').value = shareText({ platform: pf.name, rank, before: S.baseline, after: c.total, saved, rel });
+  updateShareCount();
   show('result');
+}
+
+// ---- X でポスト ----
+const PUBLIC_URL = 'https://masakiokuda-eng.github.io/container-cost-sumirator/';
+const SHARE_HASHTAGS = '#jawsug #jawsug_sre';
+
+function gameUrl() {
+  const local = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  return local ? PUBLIC_URL : location.origin + location.pathname;
+}
+
+// ポストの文面（ここを書き換えると文面が変わる）
+function shareText(r) {
+  const rate = ((r.saved / r.before) * 100).toFixed(1);
+  const yearMan = Math.round((r.saved * 12 * PRICE.usdJpy) / 10000);
+  return [
+    `コンテナコスト削減シミュレーターで ${r.platform} に挑戦しました。`,
+    `ランク ${r.rank}｜月額 ${fmtUsd(r.before)} → ${fmtUsd(r.after)}（${rate}% 削減）`,
+    `年間 約${yearMan.toLocaleString()}万円の削減、信頼性スコア ${r.rel}`,
+    SHARE_HASHTAGS,
+    gameUrl(),
+  ].join('\n');
+}
+
+// X の文字数（全角は 2、URL は 23 として数える）
+function weightedLength(text) {
+  const noUrl = text.replace(/https?:\/\/\S+/g, '');
+  const urls = (text.match(/https?:\/\/\S+/g) || []).length;
+  let n = urls * 23;
+  for (const ch of noUrl) {
+    const cp = ch.codePointAt(0);
+    n += (cp <= 0x10ff || (cp >= 0x2000 && cp <= 0x200d) || (cp >= 0x2010 && cp <= 0x201f) || (cp >= 0x2032 && cp <= 0x2037)) ? 1 : 2;
+  }
+  return n;
+}
+
+function updateShareCount() {
+  const n = weightedLength($('#share-text').value);
+  $('#share-count').textContent = `${n} / 280`;
+  $('#share-count').classList.toggle('up', n > 280);
+}
+
+function postToX() {
+  const url = 'https://x.com/intent/post?text=' + encodeURIComponent($('#share-text').value);
+  window.open(url, '_blank', 'noopener,noreferrer,width=600,height=520');
+}
+
+async function copyShareText() {
+  const btn = $('#btn-copy');
+  try {
+    await navigator.clipboard.writeText($('#share-text').value);
+    btn.textContent = 'コピーしました';
+  } catch {
+    $('#share-text').select();
+    btn.textContent = '選択しました（Ctrl+C でコピー）';
+  }
+  setTimeout(() => { btn.textContent = '文面をコピー'; }, 2000);
 }
 
 // ---- タイトル ----
@@ -484,5 +543,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-quit').addEventListener('click', () => { if (confirm('タイトルに戻りますか？進行状況は失われます。')) show('title'); });
   $('#btn-retry').addEventListener('click', () => newGame(S.platform));
   $('#btn-title').addEventListener('click', () => show('title'));
+  $('#btn-post').addEventListener('click', postToX);
+  $('#btn-copy').addEventListener('click', copyShareText);
+  $('#share-text').addEventListener('input', updateShareCount);
   show('title');
 });
