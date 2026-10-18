@@ -188,7 +188,7 @@ const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function show(screen) {
-  for (const id of ['title', 'game', 'result']) $('#' + id).hidden = id !== screen;
+  for (const id of ['title', 'game', 'result', 'shared']) $('#' + id).hidden = id !== screen;
   window.scrollTo(0, 0);
 }
 
@@ -461,31 +461,63 @@ function showResult() {
       <li>コスト面だけなら、この規模では ECS on Fargate が最も安い。ROSA は OpenShift が必要な理由がある場合に選ぶ。</li>
     </ul>
     <p class="muted small">単価は資料の前提（東京リージョン、1 ドル = 150 円）に基づく概算。「要確認」の単価は AWS Pricing Calculator で再計算すること。</p>`;
-  $('#share-text').value = shareText({ platform: pf.name, rank, before: S.baseline, after: c.total, saved, rel });
+  $('#share-text').value = shareText({ platformId: p, rank, before: S.baseline, after: c.total, rel });
   updateShareCount();
   show('result');
 }
 
 // ---- X でポスト ----
 const PUBLIC_URL = 'https://masakiokuda-eng.github.io/container-cost-sumirator/';
-const SHARE_HASHTAGS = '#jawsug #jawsug_sre';
 
 function gameUrl() {
   const local = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   return local ? PUBLIC_URL : location.origin + location.pathname;
 }
 
+// 結果ページの URL（開くとその結果が表示される）
+function resultUrl(r) {
+  const q = new URLSearchParams({ p: r.platformId, rank: r.rank, b: r.before.toFixed(1), a: r.after.toFixed(1), rel: String(r.rel) });
+  return gameUrl() + '?' + q.toString();
+}
+
+const shareRate = (r) => (((r.before - r.after) / r.before) * 100).toFixed(1);
+const shareYearMan = (r) => Math.round(((r.before - r.after) * 12 * PRICE.usdJpy) / 10000).toLocaleString();
+
 // ポストの文面（ここを書き換えると文面が変わる）
 function shareText(r) {
-  const rate = ((r.saved / r.before) * 100).toFixed(1);
-  const yearMan = Math.round((r.saved * 12 * PRICE.usdJpy) / 10000);
   return [
-    `コンテナコスト削減シミュレーターで ${r.platform} に挑戦しました。`,
-    `ランク ${r.rank}｜月額 ${fmtUsd(r.before)} → ${fmtUsd(r.after)}（${rate}% 削減）`,
-    `年間 約${yearMan.toLocaleString()}万円の削減、信頼性スコア ${r.rel}`,
-    SHARE_HASHTAGS,
-    gameUrl(),
+    '💰🦈コンテナコスト削減シミュレーター🦈💰',
+    '',
+    `コンテナコスト削減シミュレーターで ${PLATFORMS[r.platformId].name} に挑戦しました。`,
+    `ランク ${r.rank}｜月額 ${fmtUsd(r.before)} → ${fmtUsd(r.after)}（${shareRate(r)}% 削減）`,
+    `年間 約${shareYearMan(r)}万円の削減、信頼性スコア ${r.rel}`,
+    resultUrl(r),
   ].join('\n');
+}
+
+// 共有された結果ページ（?p=ecs&rank=S&b=987.7&a=366.4&rel=100）
+function parseSharedResult() {
+  const q = new URLSearchParams(location.search);
+  const r = { platformId: q.get('p'), rank: q.get('rank'), before: Number(q.get('b')), after: Number(q.get('a')), rel: Number(q.get('rel')) };
+  if (!PLATFORMS[r.platformId] || !['S', 'A', 'B', 'C'].includes(r.rank)) return null;
+  if (![r.before, r.after, r.rel].every(Number.isFinite) || r.before <= 0 || r.after < 0 || r.rel < 0 || r.rel > 100) return null;
+  return r;
+}
+
+function showSharedResult(r) {
+  const pf = PLATFORMS[r.platformId];
+  $('#shared-body').innerHTML = `
+    <div class="result-head">
+      <div class="rank rank-${r.rank}">${r.rank}</div>
+      <div><h2>${esc(pf.name)} に挑戦した結果</h2><p>コンテナコスト削減シミュレーターのプレイ結果です。</p></div>
+    </div>
+    <table class="tbl kv">
+      <tr><th>月額</th><td class="num">${fmtUsd(r.before)} → ${fmtUsd(r.after)}</td><td>${shareRate(r)}% 削減</td></tr>
+      <tr><th>年間の削減額</th><td class="num">約${shareYearMan(r)}万円</td><td>1 ドル = 150 円で換算</td></tr>
+      <tr><th>信頼性スコア</th><td class="num">${r.rel}</td><td>100 から開始</td></tr>
+    </table>`;
+  document.title = `ランク ${r.rank}｜${pf.name}｜コンテナコスト削減シミュレーター`;
+  show('shared');
 }
 
 // X の文字数（全角は 2、URL は 23 として数える）
@@ -546,5 +578,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-post').addEventListener('click', postToX);
   $('#btn-copy').addEventListener('click', copyShareText);
   $('#share-text').addEventListener('input', updateShareCount);
-  show('title');
+  $('#btn-play').addEventListener('click', () => {
+    history.replaceState(null, '', location.pathname);
+    document.title = 'コンテナコスト削減シミュレーター';
+    show('title');
+  });
+  const shared = parseSharedResult();
+  if (shared) showSharedResult(shared); else show('title');
 });
