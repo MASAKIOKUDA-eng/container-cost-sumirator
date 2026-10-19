@@ -543,6 +543,8 @@ function shareText(r) {
     `ランク ${r.rank}｜月額 ${fmtUsd(r.before)} → ${fmtUsd(r.after)}（${shareRate(r)}% 削減）`,
     `年間 約${shareYearMan(r)}万円の削減、信頼性スコア ${r.rel}`,
     resultUrl(r),
+    '',
+    '#jawsug #jawsug_sre',
   ].join('\n');
 }
 
