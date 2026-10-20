@@ -3,6 +3,9 @@
 
 AWS のコンテナ基盤（ECS on Fargate / EKS on EC2 / ROSA）のコスト削減を、Well-Architected フレームワークに沿って体験するブラウザゲームです。
 
+- ゲーム: https://masakiokuda-eng.github.io/container-cost-sumirator/
+- 解説: https://masakiokuda-eng.github.io/container-cost-sumirator/guide.html
+
 ## 遊び方
 
 1 年間を 3 か月ごとの 4 つの四半期に分けて進めます。
